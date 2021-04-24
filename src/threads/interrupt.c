@@ -78,7 +78,7 @@ intr_get_level (void)
 /* Enables or disables interrupts as specified by LEVEL and
    returns the previous interrupt status. */
 enum intr_level
-intr_set_level (enum intr_level level) 
+intr_set_level (enum intr_level level)
 {
   return level == INTR_ON ? intr_enable () : intr_disable ();
 }

@@ -171,6 +171,7 @@ thread_create (const char *name, int priority,
   struct switch_entry_frame *ef;
   struct switch_threads_frame *sf;
   tid_t tid;
+  enum intr_level old_level;
 
   ASSERT (function != NULL);
 
@@ -182,6 +183,11 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+
+  /* Prepare thread for first run by initializing its stack.
+     Do this atomically so intermediate values for the 'stack' 
+     member cannot be observed. */
+  old_level = intr_disable ();
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -198,10 +204,36 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  intr_set_level (old_level);
+  /*Initialize tics_blocked*/
+  t->ticks_blocked = 0;      
+
   /* Add to run queue. */
   thread_unblock (t);
 
   return tid;
+}
+
+/* check the thread if it is time to end of the sleeping time.*/
+void
+blocked_thread_check(struct thread *t, void *aux UNUSED)
+{
+  if(t->status == THREAD_BLOCKED && t->ticks_blocked > 0)
+  {
+    t->ticks_blocked--;
+    if(t->ticks_blocked == 0)
+    {
+       thread_unblock(t);
+    }
+  }
+
+}
+
+/* compare function */
+bool 
+compare_thread_priority (const struct list_elem *i, const struct list_elem *j, void *aux UNUSED)
+{
+  return list_entry(i, struct thread, elem)->priority > list_entry(j, struct thread, elem)->priority;
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled
@@ -237,7 +269,8 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  /* list_push_back (&ready_list, &t->elem); */
+  list_insert_ordered (&ready_list, &t->elem, (list_less_func *)&compare_thread_priority, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -308,7 +341,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+     list_insert_ordered (&ready_list, &cur->elem, (list_less_func *)&compare_thread_priority, NULL);                                    //list_push_back (&ready_list, &cur->elem);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -451,8 +484,6 @@ is_thread (struct thread *t)
 static void
 init_thread (struct thread *t, const char *name, int priority)
 {
-  enum intr_level old_level;
-
   ASSERT (t != NULL);
   ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
   ASSERT (name != NULL);
@@ -463,10 +494,9 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+  /* list_push_back (&all_list, &t->allelem); */
+  list_insert_ordered (&all_list, &t->allelem, (list_less_func *)&compare_thread_priority, NULL);
 
-  old_level = intr_disable ();
-  list_push_back (&all_list, &t->allelem);
-  intr_set_level (old_level);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

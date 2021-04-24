@@ -60,7 +60,7 @@ timer_calibrate (void)
   /* Refine the next 8 bits of loops_per_tick. */
   high_bit = loops_per_tick;
   for (test_bit = high_bit >> 1; test_bit != high_bit >> 10; test_bit >>= 1)
-    if (!too_many_loops (loops_per_tick | test_bit))
+    if (!too_many_loops (high_bit | test_bit))
       loops_per_tick |= test_bit;
 
   printf ("%'"PRIu64" loops/s.\n", (uint64_t) loops_per_tick * TIMER_FREQ);
@@ -89,11 +89,25 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
+  /*int64_t start = timer_ticks ();
 
   ASSERT (intr_get_level () == INTR_ON);
   while (timer_elapsed (start) < ticks) 
     thread_yield ();
+  */
+  // ASSERT (intr_get_level () == INTR_ON);
+  if(ticks <= 0)
+  {
+    return;
+  }
+  else
+  {
+    enum intr_level old_level = intr_disable();         /* get the old interrupt state and off the interrupt*/
+    struct thread *current_thread = thread_current();   /* get the current thread */
+    current_thread->ticks_blocked = ticks;              /* set the ticks_blocked */
+    thread_block();                                     /* block the thread */   
+    intr_set_level(old_level);                          /* restore the old interrupt state*/
+  }
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -172,6 +186,9 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
+  enum intr_level old_level = intr_disable();
+  thread_foreach(blocked_thread_check,NULL);
+  intr_set_level(old_level);
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

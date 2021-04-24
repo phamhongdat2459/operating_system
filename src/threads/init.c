@@ -80,15 +80,16 @@ main (void)
 
   /* Clear BSS. */  
   bss_init ();
+  /* clear bbs, cho tat ca gia tri tu _start_bss den _end_bss bang 0 */
 
   /* Break command line into arguments and parse options. */
   argv = read_command_line ();
   argv = parse_options (argv);
-
+  /* lay gia tri cua argv vao, vi du argv bang alarm-single */
   /* Initialize ourselves as a thread so we can use locks,
      then enable console locking. */
-  thread_init ();
-  console_init ();  
+  thread_init (); // khoi tao thread
+  console_init (); // khoi tao console
 
   /* Greet user. */
   printf ("Pintos booting with %'"PRIu32" kB RAM...\n",
